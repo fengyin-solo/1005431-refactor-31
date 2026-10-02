@@ -1,9 +1,14 @@
 import { MODULE_BY_KEY } from '@/data/modules'
 import { allRows, listRows, resetRows, saveRows } from '@/data/local-store'
+import { evaluateReport, nextReportStatus } from '@/data/report-rules'
+import { syncRainReviewItem } from '@/data/review-sync'
 import type { ActionResult, EntryRow, ModuleMeta, OverviewResult, PageResult } from '@/data/types'
 
 // 会写进数据的「往回走」动作：命中就把这条记录标成异常态，看板上能一眼看出来。
 const NEGATIVE_ACTIONS = ['撤销', '作废', '拒绝', '驳回', '停用', '忽略', '下线', '回滚']
+
+// 「退回补充」同样是退回类动作，按既有口径标异常；处置结论本身不变。
+const RETURN_ACTIONS = ['退回补充']
 
 export function moduleMeta(key: string): ModuleMeta {
   const meta = MODULE_BY_KEY.get(key)
@@ -39,21 +44,60 @@ export function runAction(key: string, id: number, action: string): ActionResult
   if (index < 0) {
     return { ok: false, message: `没有找到编号为 ${id} 的${meta.entity}` }
   }
-  const current = String(rows[index].status)
-  if (current === target) {
+
+  const row = rows[index]
+  const current = String(row.status)
+
+  // 险情上报：确认上报与退回补充走同一份共用判定，同一张单两条入口结论一致。
+  // 重构只收拢写法，处置结论照旧（确认上报 → 已上报；退回补充 → 已退回）。
+  let reportNotes: string[] = []
+  if (key === 'report') {
+    const verdict = evaluateReport(row, rows)
+    if (!verdict.ok) {
+      return { ok: false, message: verdict.errors.join('；') }
+    }
+    reportNotes = verdict.notes
+    // 状态按 待上报 → 已上报 → 已处置 → 已退回 次序推进，跨级/回退一律拦下。
+    const allowed = nextReportStatus(current)
+    if (target === current) {
+      return { ok: false, message: `${meta.entity}已经是「${target}」，不用重复操作` }
+    }
+    if (allowed !== target) {
+      return {
+        ok: false,
+        message: `${meta.entity}当前为「${current}」，不能直接流转到「${target}」，状态须按待上报→已上报→已处置→已退回逐级推进`,
+      }
+    }
+  } else if (current === target) {
     return { ok: false, message: `${meta.entity}已经是「${target}」，不用重复操作` }
   }
+
   const lastStatus = meta.statuses[meta.statuses.length - 1]
+  const abnormal =
+    NEGATIVE_ACTIONS.some((verb) => action.startsWith(verb)) || RETURN_ACTIONS.includes(action)
   const updated: EntryRow = {
-    ...rows[index],
+    ...row,
     status: target,
     pending: target !== lastStatus,
-    abnormal: NEGATIVE_ACTIONS.some((verb) => action.startsWith(verb)),
+    abnormal,
   }
   const next = [...rows]
   next[index] = updated
   saveRows(key, next)
-  return { ok: true, message: `${meta.entity}已${action}，当前状态「${target}」` }
+
+  // 巡查复核办结：在雨量站网清单落一条待核项；重复复核沿用已有那条，不新增记录。
+  let extra = ''
+  if (key === 'patrol' && action === '确认复核') {
+    const rainRows = listRows('rain')
+    const synced = syncRainReviewItem(rainRows, updated)
+    saveRows('rain', synced.rows)
+    extra = synced.created
+      ? `；雨量站网已新增待核项「${synced.stationNo}」`
+      : `；雨量站网待核项「${synced.stationNo}」已存在，沿用原记录未新增`
+  }
+
+  const noteText = reportNotes.length > 0 ? `（提示：${reportNotes.join('；')}）` : ''
+  return { ok: true, message: `${meta.entity}已${action}，当前状态「${target}」${extra}${noteText}` }
 }
 
 export function resetModule(key: string): PageResult {

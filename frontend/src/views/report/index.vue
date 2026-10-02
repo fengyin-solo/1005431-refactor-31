@@ -79,12 +79,23 @@ import {
   moduleMeta,
   runAction as applyAction,
 } from '@/api/local-service'
+import { REPORT_FIELDS, REPORT_STATUS_FLOW } from '@/data/report-rules'
 import type { EntryRow } from '@/data/types'
 
 const meta = moduleMeta('report')
-const columns = ["上报编号", "所属隐患点", "险情类别", "发现时间", "上报层级", "处置意见", "反馈时间", "上报状态"]
-const actions = ["确认上报", "登记处置", "退回补充"]
-const statuses = ["待上报", "已上报", "已处置", "已退回"]
+// 列与状态都取共用定义，页面不再各写一份，险情类别等字段多处取数保持同一份。
+const columns = [
+  REPORT_FIELDS.serial,
+  REPORT_FIELDS.site,
+  REPORT_FIELDS.category,
+  REPORT_FIELDS.foundAt,
+  REPORT_FIELDS.level,
+  REPORT_FIELDS.opinion,
+  REPORT_FIELDS.feedbackAt,
+  '上报状态',
+]
+const actions = ['确认上报', '登记处置', '退回补充']
+const statuses = [...REPORT_STATUS_FLOW]
 const stats = [{"label": "待上报险情", "value": 0}, {"label": "已上报险情", "value": 0}, {"label": "已处置险情", "value": 0}]
 
 const rows = ref<EntryRow[]>([])

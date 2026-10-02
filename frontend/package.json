@@ -8,7 +8,8 @@
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "vue-tsc --noEmit"
+    "typecheck": "vue-tsc --noEmit",
+    "check:rules": "tsc -p scripts/tsconfig.test.json && printf '{\"type\":\"commonjs\"}' > .tmp-test/package.json && sed -i 's|require(\"@/|require(\"../|g' .tmp-test/src/api/*.js && node .tmp-test/scripts/check-rules.js; status=$?; rm -rf .tmp-test; exit $status"
   },
   "dependencies": {
     "pinia": "^2.1.7",

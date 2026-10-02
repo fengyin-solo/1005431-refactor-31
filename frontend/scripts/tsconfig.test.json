@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "outDir": "../.tmp-test",
+    "module": "commonjs",
+    "target": "es2020",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "baseUrl": "..",
+    "paths": { "@/*": ["src/*"] }
+  },
+  "include": ["../src/data/**/*.ts", "../src/api/**/*.ts", "check-rules.ts"]
+}
